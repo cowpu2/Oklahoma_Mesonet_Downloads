@@ -1,0 +1,1 @@
+Data gets written out to this folder and is then the source files for later workflows.

@@ -1,5 +1,5 @@
 ---
-title: "Burneyville Mesonet Soil Temperatures"
+title: "Burneyville Mesonet Soil Conditions"
 output:
   pdf_document: default
   html_document:
@@ -7,7 +7,7 @@ output:
 ---
 
 
-```{r header, echo=TRUE}
+```{r header, eval=FALSE, include=FALSE}
 ## CodeMonkey:  Mike Proctor
 ## ============================================================
 ## 
@@ -26,9 +26,6 @@ library("tidylog", warn.conflicts = FALSE)
 library(tictoc)
 
 # 2019-12-05 09:47:49 ------------------------------mdp
-# 2019-12-05 12:56:55 ------------------------------mdp
-# 2021-01-06 09:23:53 ------------------------------mdp
-
 
 ## Local stuff  =================
 base_path   <- find_rstudio_root_file()                        ## Finds path for project
@@ -39,61 +36,175 @@ csv_path    <- file.path(base_path, "csv_output//")            ## project
 ```
 
 
+
 ```{r Load and process files, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
-#soilTemps <- read_csv(paste0(source_path, "Mesonet_2007_1_1_2019_12_2.dat"))
+# Configured for these variables in 01_Mesonet_DLoads.Rmd
+#meso_variables <-  c("RAIN", "TAIR", "TS05", "TS10", "TR05", "TR25")
 
-soilTemps <- read_csv("dat_output/Mesonet_2020_4_29_2020_5_1.dat")
 
-#names(soilTemps)[5] <- "SoilVeg_10cm"
+soilVals <- read_csv("dat_output/Mesonet_2012_1_1_2021_12_31.dat")
 
-Soils_10cm <- soilTemps %>% filter(!is.na(Soil_Veg_10cm))  ##  Soil temps are at 15min intervals so drop NAs
+
+SoilsNA <- soilVals %>% filter(!is.na(Soil_Temp_Veg_4inch) & ##  Soil temps are at 15min intervals so drop NAs
+                               !is.na(Soil_Temp_Veg_2inch) & 
+                               !is.na(FWI_2) &
+                               !is.na(FWI_10))  
+
+
+
+
+```
+
+
+```{r summarize1, message=FALSE, include=FALSE}
+
+
+SoilDaily <- SoilsNA %>% group_by(month(TIME), day(TIME)) %>% 
+  mutate("Soil_Temp_Veg_2inch_daily" = mean(Soil_Temp_Veg_2inch),
+         "Soil_Temp_Veg_4inch_daily" = mean(Soil_Temp_Veg_4inch),
+         "FWI_2inch_daily" = mean(FWI_2),
+         "FWI_10inch_daily" = mean(FWI_10),
+         "Temp_daily" = mean(Temp)
+         ) %>% ungroup()
+
+#awol <- SoilDaily %>% filter(year(TIME) == "2014") # 2014 only has 3 months of data
+
+
 
 
 ```
 
 
 
+None of this is plotting properly except for air temps
+
+
+
+##  Soil Temperatures
 
 ```{r Plot Soil Temps, echo=FALSE, message=FALSE, warning=FALSE}
 
-Ten_Cm <-
-  ggplot(Soils_10cm, aes(x = TIME)) +
-     geom_line(aes(y = Soil_Bare_10cm, color = "Bare Soil @ 10cm")) +
-     scale_color_manual(name = "Soil Temps", values = c("Bare Soil @ 10cm" = "blue", 
-                                                        "Vegetated @ 10cm" = "green"))+
-     geom_line(aes(y = Soil_Veg_10cm, color = "Vegetated @ 10cm")) +
-     xlab("Year")+
-     ylab("Temperature C")+
-     ggtitle(paste0("Soil Temps - Bare soil vs Under Vegetation"))+
-     theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
-     facet_wrap(year(Soils_10cm$TIME), scales = "free")
 
-print(Ten_Cm) 
+  ggplot(SoilDaily, aes(x = TIME)) +
+     geom_line(aes(y = Soil_Temp_Veg_2inch_daily, color = "2 inch Soil Temp")) +
+     scale_color_manual(name = "Soil Temps", values = c("2 inch Soil Temp" = "blue", 
+                                                        "4 inch Soil Temp" = "green"))+
+     geom_line(aes(y = Soil_Temp_Veg_4inch_daily, color = "4 inch Soil Temp")) +
+     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
+     xlab("Month")+
+     ylab("Temperature F")+
+     #scale_x_discrete(limits = month.abb) +
+     ggtitle(paste0("Soil Temps - Under Sod"))+
+     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
+     facet_wrap(year(SoilDaily$TIME), scales = "free", ncol = 5)
+
+
 ```
+
+## Air Temperature
+```{r Plot Air Temps, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+airTemp <- soilVals %>% group_by("year" = year(TIME),"month" = month(TIME), "day" = day(TIME)) %>% na.omit() %>% 
+  summarise("Temp_daily" = round(mean(Temp),0)) %>% unite("Date", year, month, day, sep = "-")
+
+airTemp$Date <- as.Date(airTemp$Date)
+
+df <- airTemp %>% filter(year(Date) == "2018")
+
+  ggplot(airTemp, aes(x = Date)) +
+     geom_line(aes(y = Temp_daily, color = "red")) +
+
+     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
+     xlab("Month")+
+     ylab("Temperature F")+
+     #scale_x_discrete(limits = month.abb) +
+     ggtitle(paste0("Air Temperature"))+
+     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
+     facet_wrap(year(airTemp$Date), scales = "free", ncol = 5)
+
+
+```
+
+
+# Ten Year Average Temperatures
+
+```{r 10 yr temps}
+
+library(scales)
+
+tenYear <- airTemp %>% group_by("month" = month(Date), "day" = day(Date)) %>% 
+                       summarise("daily_10_yr" = round(mean(Temp_daily),0)) %>% unite("Date", month, day, sep = "-") %>% 
+                       mutate("yr" = paste0("1999-", Date))
+
+tenYear$yr <- as_date(tenYear$yr)
+
+  ggplot(tenYear, aes(x = yr)) +
+     geom_line(aes(y = daily_10_yr, color = "red")) +
+
+     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
+     xlab("Month")+
+     ylab("Temperature F")+
+     #scale_x_date(limits = month.abb) +
+     ggtitle(paste0("Burneyville Ten Year Average Air Temperature"))+
+     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
+     #facet_wrap(month(tenYear$yr), scales = "free", ncol = 5)
+     scale_x_date(labels = label_date_short(format = c("%b")), breaks = breaks_width("1 month")) +
+     theme(legend.position = "none") 
+
+  
+```
+
+
+## Soil Moisture - Fractional Water Index
+
+```{r Plot Soil Moisture, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+  ggplot(SoilDaily, aes(x = TIME)) +
+     geom_line(aes(y = FWI_2, color = "2 inch Soil Moisture")) +
+     scale_color_manual(name = "Soil Moisture", values = c("2 inch Soil Moisture" = "blue", 
+                                                        "10 inch Soil Moisture" = "green"))+
+     geom_line(aes(y = FWI_10, color = "10 inch Soil Moisture")) +
+     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
+     xlab("Month")+
+     ylab("Fractional Water Index")+
+     #scale_x_discrete(limits = month.abb) +
+     ggtitle(paste0("Soil Moisture - Burneyville"))+
+     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
+     facet_wrap(year(SoilDaily$TIME), scales = "free", ncol = 5)
+
+
+
+
+```
+
+
+
 
 ```{r Plot each year, echo=FALSE, message=FALSE, warning=FALSE}
 
 #annums <- c(2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019)
-annums <- c(2020, 2021)
+annums <- c(2012:2021)
 
-tic() 
+
 for (i in annums) {
 
-w <- Soils_10cm %>% filter(year(TIME) == i)
+df <- SoilDaily %>% filter(year(TIME) == i)
 
-  Ten_Cm <- 
-    ggplot(w, aes(x = TIME)) +
-       geom_line(aes(y = Soil_Bare_10cm, color = "Bare Soil @ 10cm")) +
-       scale_color_manual(name = "Soil Temps", values = c("Bare Soil @ 10cm" = "blue", 
-                                                          "Vegetated @ 10cm" = "green"))+
-       geom_line(aes(y = Soil_Veg_10cm, color = "Vegetated @ 10cm")) +
-       xlab(i)+
-       ylab("Temperature F")+
+fred <- 
+    ggplot(df, aes(x = TIME)) +
+     geom_line(aes(y = Soil_Temp_Veg_2inch_daily, color = "2 inch Soil Temp")) +
+     scale_color_manual(name = "Soil Temps", values = c("2 inch Soil Temp" = "blue", 
+                                                        "4 inch Soil Temp" = "green"))+
+     geom_line(aes(y = Soil_Temp_Veg_4inch_daily, color = "4 inch Soil Temp")) +
+     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
+     xlab(i)+
+     ylab("Temperature F")+
        ggtitle(paste0("Soil Temps - Bare soil vs Under Vegetation - ", i))
        
-
-  print(Ten_Cm)
+print(fred)
 
 }
-toc()
+
 ```

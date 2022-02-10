@@ -1,5 +1,6 @@
 ---
 title: "Burneyville Mesonet Soil Conditions"
+subtitle: "2012-2021"
 output:
   pdf_document: default
   html_document:
@@ -76,33 +77,73 @@ SoilDaily <- SoilsNA %>% group_by(month(TIME), day(TIME)) %>%
 
 
 
-None of this is plotting properly except for air temps
-
-
-
 ##  Soil Temperatures
 
-```{r Plot Soil Temps, echo=FALSE, message=FALSE, warning=FALSE}
+
+```{r soil temps2, echo=FALSE, message=FALSE}
+
+SoilAnnual <- SoilDaily %>% group_by("Mon"   = month(TIME), "Day" = day(TIME)) %>% 
+  #mutate("Soil_Temp_Veg_2inch_Avg_Annual"   = mean(Soil_Temp_Veg_2inch_daily),
+  summarise("Soil_Temp_Veg_2inch_Avg_Annual" = mean(Soil_Temp_Veg_2inch_daily),
+            "Soil_Temp_Veg_4inch_Avg_Annual" = mean(Soil_Temp_Veg_4inch_daily),
+            "FWI_2inch_Annual"               = mean(FWI_2inch_daily),
+            "FWI_10inch_Annual"              = mean(FWI_10inch_daily),
+            "Temp_Annual"                    = mean(Temp_daily)
+            ) 
 
 
-  ggplot(SoilDaily, aes(x = TIME)) +
-     geom_line(aes(y = Soil_Temp_Veg_2inch_daily, color = "2 inch Soil Temp")) +
-     scale_color_manual(name = "Soil Temps", values = c("2 inch Soil Temp" = "blue", 
-                                                        "4 inch Soil Temp" = "green"))+
-     geom_line(aes(y = Soil_Temp_Veg_4inch_daily, color = "4 inch Soil Temp")) +
-     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
-     xlab("Month")+
-     ylab("Temperature F")+
-     #scale_x_discrete(limits = month.abb) +
-     ggtitle(paste0("Soil Temps - Under Sod"))+
-     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
-     facet_wrap(year(SoilDaily$TIME), scales = "free", ncol = 5)
+Annual <- SoilAnnual %>% mutate(Mon = as.factor(Mon),Day = as.factor(Day))
+
+boxAnnual <-  pivot_longer(Annual, c(Soil_Temp_Veg_2inch_Avg_Annual, 
+                                     Soil_Temp_Veg_4inch_Avg_Annual), 
+                                     names_to = "Depth",
+                                     values_to = "Value")
+
+
+boxAnnual$Mon <- month.abb[boxAnnual$Mon] # Both of these statements are required - no idea why
+boxAnnual$Mon <- factor(boxAnnual$Mon, levels = month.abb)
+
+
+  ggplot(boxAnnual, aes(x = Mon, y = Value, color = Depth)) +
+    geom_boxplot() +
+    ylab("Temperature F")+
+    scale_color_discrete(name = "Depth", labels = c("2 inches", "4 inches")) +
+    theme(axis.title.x = element_blank()) +
+    ggtitle(paste0("Mean Annual Soil Temps Under Sod @ Burneyville"))
+  
+  
+```
+
+
+## Soil Moisture - Fractional Water Index
+
+```{r Plot Soil Moisture, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+
+boxFWI <-  pivot_longer(Annual, c(FWI_2inch_Annual,
+                                     FWI_10inch_Annual), 
+                                     names_to = "Depth",
+                                     values_to = "Value")
+
+
+boxFWI$Mon <- month.abb[boxFWI$Mon] # Both of these statements are required - no idea why
+boxFWI$Mon <- factor(boxFWI$Mon, levels = month.abb)
+
+
+  ggplot(boxFWI, aes(x = Mon, y = Value, color = Depth)) +
+    geom_boxplot() +
+    ylab("Fractional Water Index")+
+    scale_color_discrete(name = "Depth", labels = c("2 inches", "10 inches")) +
+    theme(axis.title.x = element_blank()) +
+    ggtitle(paste0("Soil Moisture - FWI @ Burneyville"))
 
 
 ```
 
-## Air Temperature
-```{r Plot Air Temps, echo=FALSE, message=FALSE, warning=FALSE}
+
+
+```{r Plot Air Temps, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 
 airTemp <- soilVals %>% group_by("year" = year(TIME),"month" = month(TIME), "day" = day(TIME)) %>% na.omit() %>% 
@@ -119,70 +160,23 @@ df <- airTemp %>% filter(year(Date) == "2018")
      xlab("Month")+
      ylab("Temperature F")+
      #scale_x_discrete(limits = month.abb) +
+     theme(legend.position = "none") +
+
      ggtitle(paste0("Air Temperature"))+
-     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
+     theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
      facet_wrap(year(airTemp$Date), scales = "free", ncol = 5)
 
 
-```
 
-
-# Ten Year Average Temperatures
-
-```{r 10 yr temps}
-
-library(scales)
-
-tenYear <- airTemp %>% group_by("month" = month(Date), "day" = day(Date)) %>% 
-                       summarise("daily_10_yr" = round(mean(Temp_daily),0)) %>% unite("Date", month, day, sep = "-") %>% 
-                       mutate("yr" = paste0("1999-", Date))
-
-tenYear$yr <- as_date(tenYear$yr)
-
-  ggplot(tenYear, aes(x = yr)) +
-     geom_line(aes(y = daily_10_yr, color = "red")) +
-
-     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
-     xlab("Month")+
-     ylab("Temperature F")+
-     #scale_x_date(limits = month.abb) +
-     ggtitle(paste0("Burneyville Ten Year Average Air Temperature"))+
-     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
-     #facet_wrap(month(tenYear$yr), scales = "free", ncol = 5)
-     scale_x_date(labels = label_date_short(format = c("%b")), breaks = breaks_width("1 month")) +
-     theme(legend.position = "none") 
-
+  
   
 ```
 
 
-## Soil Moisture - Fractional Water Index
-
-```{r Plot Soil Moisture, echo=FALSE, message=FALSE, warning=FALSE}
-
-
-  ggplot(SoilDaily, aes(x = TIME)) +
-     geom_line(aes(y = FWI_2, color = "2 inch Soil Moisture")) +
-     scale_color_manual(name = "Soil Moisture", values = c("2 inch Soil Moisture" = "blue", 
-                                                        "10 inch Soil Moisture" = "green"))+
-     geom_line(aes(y = FWI_10, color = "10 inch Soil Moisture")) +
-     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
-     xlab("Month")+
-     ylab("Fractional Water Index")+
-     #scale_x_discrete(limits = month.abb) +
-     ggtitle(paste0("Soil Moisture - Burneyville"))+
-     #theme(axis.ticks = element_blank(), axis.text.x = element_blank()) +
-     facet_wrap(year(SoilDaily$TIME), scales = "free", ncol = 5)
 
 
 
-
-```
-
-
-
-
-```{r Plot each year, echo=FALSE, message=FALSE, warning=FALSE}
+```{r Plot each year, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 
 #annums <- c(2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019)
 annums <- c(2012:2021)
@@ -201,7 +195,7 @@ fred <-
      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))  +
      xlab(i)+
      ylab("Temperature F")+
-       ggtitle(paste0("Soil Temps - Bare soil vs Under Vegetation - ", i))
+       ggtitle(paste0("Soil Temps -  - ", i))
        
 print(fred)
 
